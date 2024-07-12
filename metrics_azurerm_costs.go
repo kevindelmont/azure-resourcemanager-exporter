@@ -27,6 +27,10 @@ const (
 	CostsQueryEnvVarPrefix = "COSTS_QUERY_"
 )
 
+var (
+	retryAfter int
+)
+
 type (
 	MetricsCollectorAzureRmCosts struct {
 		collector.Processor
@@ -120,11 +124,11 @@ func (m *MetricsCollectorAzureRmCosts) Collect(callback chan<- func()) {
 			exportType = armcostmanagement.ExportTypeAmortizedCost
 		}
 
-		m.collectRunCostQuery(&query, exportType, callback)
+		m.collectRunCostQuery(&query, exportType)
 	}
 }
 
-func (m *MetricsCollectorAzureRmCosts) collectRunCostQuery(query *config.CollectorCostsQuery, exportType armcostmanagement.ExportType, callback chan<- func()) {
+func (m *MetricsCollectorAzureRmCosts) collectRunCostQuery(query *config.CollectorCostsQuery, exportType armcostmanagement.ExportType) {
 	queryLogger := logger.With(zap.String("query", query.Name))
 	for _, timeframe := range query.TimeFrames {
 		timeframeLogger := queryLogger.With(zap.String("timeframe", timeframe))
@@ -452,7 +456,7 @@ func (m *MetricsCollectorAzureRmCosts) sendCostQuery(ctx context.Context, logger
 						logger.Errorf("Unable to parse retry-after header: %v", retryAfterHeader)
 						return fmt.Errorf("unable to parse retry-after header: %v", retryAfterHeader)
 					}
-					logger.Errorf("Received 429 Too Many Requests. Retrying after %d seconds. Headers: %v", retryAfter, resp.Header)
+					logger.Warnf("Received 429 Too Many Requests. Retrying after %d seconds.", retryAfter)
 					time.Sleep(time.Duration(retryAfter) * time.Second)
 					return fmt.Errorf("received 429 Too Many Requests, retrying after %d seconds", retryAfter)
 				}
@@ -474,6 +478,7 @@ func (m *MetricsCollectorAzureRmCosts) sendCostQuery(ctx context.Context, logger
 			if err != nil {
 				// If we encounter a rate limit error, retry after the specified delay.
 				if strings.Contains(err.Error(), "received 429 Too Many Requests") {
+					logger.Infoln("Encountered rate limit error. Retrying after the specified delay of %d seconds.", retryAfter)
 					continue
 				}
 				return result, err
