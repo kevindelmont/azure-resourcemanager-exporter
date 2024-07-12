@@ -478,7 +478,6 @@ func (m *MetricsCollectorAzureRmCosts) sendCostQuery(ctx context.Context, logger
 			if err != nil {
 				// If we encounter a rate limit error, retry after the specified delay.
 				if strings.Contains(err.Error(), "received 429 Too Many Requests") {
-					logger.Infoln("Encountered rate limit error. Retrying after the specified delay of %d seconds.", retryAfter)
 					continue
 				}
 				return result, err
